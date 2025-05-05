@@ -14,7 +14,7 @@ import userRouter from './routes/user.js';
 // INIT
 const app = express();
 const PORT = process.env.PORT;
-const DB = process.env.DB;
+const DB = process.env.MONGO_URI;
 
 //Middleware
 app.use(express.json());
