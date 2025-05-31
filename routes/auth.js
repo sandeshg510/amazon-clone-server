@@ -40,7 +40,6 @@ authRouter.post('/api/signup', async (request, response) => {
 });
 
 // Create a Sign in route
-
 authRouter.post('/api/signin', async (request, response) => {
 	try {
 		const { email, password } = request.body;

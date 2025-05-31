@@ -37,6 +37,8 @@ userRouter.post('/api/add-to-cart', auth, async (req, res) => {
 		user = await user.save();
 		res.json(user);
 	} catch (e) {
+		console.log(e.message);
+
 		res.status(500).json({ error: e.message });
 	}
 });
@@ -49,15 +51,17 @@ userRouter.delete('/api/remove-from-cart/:id', auth, async (req, res) => {
 
 		for (let i = 0; i < user.cart.length; i++) {
 			if (user.cart[i].product._id.equals(product._id)) {
-				if (user.cart[i].product.quantity == 1) {
-					user.cart.splice(i, 1);
+				if (user.cart[i].quantity === 1) {
+					user.cart.splice(i, 1); // Remove item from cart
 				} else {
-					user.cart[i].quantity -= 1;
+					user.cart[i].quantity -= 1; // Decrease quantity
 				}
+				break; // Exit loop once item is found and handled
 			}
 		}
+
 		user = await user.save();
-		res.json(user);
+		res.json({ cart: user.cart }); // Return only updated cart
 	} catch (e) {
 		res.status(500).json({ error: e.message });
 	}
@@ -76,41 +80,108 @@ userRouter.post('/api/save-user-address', auth, async (req, res) => {
 	}
 });
 
-// order product
-userRouter.post('/api/order', auth, async (request, response) => {
+// // order product
+
+userRouter.post('/api/order', auth, async (req, res) => {
 	try {
-		const { cart, totalPrice, address } = request.body;
+		const { cart, totalPrice, address } = req.body;
+
+		if (!Array.isArray(cart)) {
+			return res.status(400).json({ error: 'Cart must be an array' });
+		}
+		if (cart.length === 0) {
+			return res.status(400).json({ error: 'Cart is empty' });
+		}
+
 		let products = [];
 
-		for (let i = 0; i < cart.length; i++) {
-			let product = await Product.findById(cart[i].product._id);
-			if (product.quantity >= cart[i].quantity) {
-				product.quantity -= cart[i].quantity;
-				products.push({ product, quantity: cart[i].quantity });
-				await product.save();
-			} else {
-				response
+		for (const item of cart) {
+			const productId = item?.product?._id || item.productId;
+			if (!productId) {
+				return res
 					.status(400)
-					.json({ msg: `${product.name} is out of stock!` });
+					.json({ error: 'Product ID missing in cart item' });
 			}
-		}
-		let user = await User.findById(request.user);
-		user.cart = [];
-		user = await user.save();
 
-		let order = new Order({
+			const product = await Product.findById(productId);
+			if (!product) {
+				return res
+					.status(404)
+					.json({ error: `Product not found: ${productId}` });
+			}
+
+			if (product.quantity < item.quantity) {
+				return res.status(400).json({
+					error: `${product.name} is out of stock! Available: ${product.quantity}`,
+				});
+			}
+
+			product.quantity -= item.quantity;
+			await product.save();
+
+			products.push({
+				product: product.toObject(),
+				quantity: item.quantity,
+			});
+		}
+
+		// Clear user cart
+		const user = await User.findById(req.user);
+		user.cart = [];
+		await user.save();
+
+		const order = new Order({
 			products,
 			totalPrice,
 			address,
-			userId: request.user,
-			orderedAt: new Date().getMilliseconds(),
+			userId: req.user,
+			orderedAt: Date.now(),
 		});
-		order = await order.save();
-		response.json(order);
+
+		await order.save();
+
+		res.json(order);
 	} catch (e) {
-		response.status(500).json({ error: e.message });
+		console.error('Order error:', e);
+		res.status(500).json({ error: e.message });
 	}
 });
+
+// userRouter.post('/api/order', auth, async (req, res) => {
+// 	try {
+// 		const { cart, totalPrice, address } = req.body;
+// 		let products = [];
+
+// 		for (let i = 0; i < cart.length; i++) {
+// 			let product = await Product.findById(cart[i].product._id);
+// 			if (product.quantity >= cart[i].quantity) {
+// 				product.quantity -= cart[i].quantity;
+// 				products.push({ product, quantity: cart[i].quantity });
+// 				await product.save();
+// 			} else {
+// 				return res
+// 					.status(400)
+// 					.json({ msg: `${product.name} is out of stock!` });
+// 			}
+// 		}
+
+// 		let user = await User.findById(req.user);
+// 		user.cart = [];
+// 		user = await user.save();
+
+// 		let order = new Order({
+// 			products,
+// 			totalPrice,
+// 			address,
+// 			userId: req.user,
+// 			orderedAt: new Date().getTime(),
+// 		});
+// 		order = await order.save();
+// 		res.json(order);
+// 	} catch (e) {
+// 		res.status(500).json({ error: e.message });
+// 	}
+// });
 
 userRouter.get('/api/orders/me', auth, async (req, res) => {
 	try {

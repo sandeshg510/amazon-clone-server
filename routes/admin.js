@@ -3,24 +3,43 @@ import admin from '../middlewares/admin.js';
 import Product from '../models/product.js';
 import Order from '../models/order.js';
 import { request } from 'http';
-// import productModule from './product.js';
-
-// const { Product } = productModule;
 
 const adminRouter = express.Router();
 
 adminRouter.post('/admin/add-product', admin, async (request, response) => {
 	try {
-		const { name, description, images, quantity, price, category } =
-			request.body;
-		let product = Product({
+		const {
 			name,
+			brand,
 			description,
 			images,
 			quantity,
 			price,
 			category,
+			subCategory,
+			subClassification,
+			colour,
+			about,
+			sizes,
+			inTheBox,
+		} = request.body;
+
+		let product = new Product({
+			name,
+			brand,
+			description,
+			images,
+			quantity,
+			price,
+			category,
+			subCategory,
+			subClassification,
+			colour,
+			about,
+			sizes,
+			inTheBox,
 		});
+
 		product = await product.save();
 		response.json(product);
 	} catch (e) {
@@ -49,30 +68,31 @@ adminRouter.post('/admin/delete-product', admin, async (request, response) => {
 
 adminRouter.get('/admin/get-orders', admin, async (request, response) => {
 	try {
-		const orders = await Order.find({});
+		const orders = await Order.find({}).populate('products.product');
+
 		response.json(orders);
 	} catch (e) {
 		response.status(500).json(e.message);
 	}
 });
 
-adminRouter.post(
-	'/admin/change-order-status',
-	// admin,
-	async (request, response) => {
-		try {
-			const { id, status } = request.body;
-			let order = await Order.findById(id);
-
-			order.status = status;
-			order = await order.save();
-
-			response.json(order);
-		} catch (e) {
-			response.status(500).json({ error: e.message });
+adminRouter.post('/admin/change-order-status', admin, async (req, res) => {
+	try {
+		const { id, status } = req.body;
+		if (status < 0 || status > 2) {
+			return res.status(400).json({ message: 'Invalid status value' });
 		}
+
+		const order = await Order.findById(id);
+		order.status = status;
+		await order.save();
+
+		res.json(order);
+	} catch (e) {
+		console.error('Error changing status:', e);
+		res.status(500).json({ error: e.message });
 	}
-);
+});
 
 adminRouter.get('/admin/analytics', admin, async (req, res) => {
 	try {
@@ -86,19 +106,23 @@ adminRouter.get('/admin/analytics', admin, async (req, res) => {
 					orders[i].products[j].product.price;
 			}
 		}
-		// CATEGORY WISE ORDER FETCHING
-		let mobileEarnings = await fetchCategoryWiseProduct('Mobiles');
-		let essentialEarnings = await fetchCategoryWiseProduct('Essentials');
-		let applianceEarnings = await fetchCategoryWiseProduct('Appliances');
-		let booksEarnings = await fetchCategoryWiseProduct('Books');
+		let groceriesEarnings = await fetchCategoryWiseProduct('Groceries');
 		let fashionEarnings = await fetchCategoryWiseProduct('Fashion');
+		let mobileEarnings = await fetchCategoryWiseProduct('Mobiles');
+		let electronicsEarnings = await fetchCategoryWiseProduct('Electronics');
+		let applianceEarnings = await fetchCategoryWiseProduct('Appliances');
+
+		let furnitureEarnings = await fetchCategoryWiseProduct('Furniture');
+		let booksEarnings = await fetchCategoryWiseProduct('Books');
 
 		let earnings = {
+			groceriesEarnings,
 			totalEarnings,
 			mobileEarnings,
-			essentialEarnings,
+			electronicsEarnings,
 			applianceEarnings,
 			booksEarnings,
+			furnitureEarnings,
 			fashionEarnings,
 		};
 
